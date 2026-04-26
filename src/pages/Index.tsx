@@ -80,7 +80,7 @@ const Index = () => {
               </div>
 
               <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.05] tracking-tight">
-                Forge your <span className="gradient-text glow-text">strongest</span> self.
+                Build your <span className="gradient-text glow-text">strongest</span> self.
               </h1>
 
               <p className="mt-6 text-lg text-muted-foreground max-w-xl leading-relaxed">
@@ -287,7 +287,7 @@ const Index = () => {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent,rgba(0,0,0,0.4))]" />
             <div className="relative">
               <h2 className="font-display text-4xl md:text-5xl font-bold tracking-tight text-primary-foreground">
-                Stop guessing. Start forging.
+                Stop guessing. Unleash your power.
               </h2>
               <p className="mt-4 text-primary-foreground/80 max-w-xl mx-auto">
                 Join 40,000+ athletes training smarter every day. Free forever — no credit card.
@@ -308,7 +308,7 @@ const Index = () => {
       <footer className="border-t border-border/50 py-10 mt-10">
         <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
           <Logo size="sm" />
-          <p className="text-xs text-muted-foreground">© 2026 FORGE. Built for athletes, by athletes.</p>
+          <p className="text-xs text-muted-foreground">© 2026 VAJRA. Built for athletes, by athletes.</p>
         </div>
       </footer>
     </div>

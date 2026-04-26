@@ -1,15 +1,26 @@
-import { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { ReactNode, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import {
   Activity, Apple, Brain, Droplets, LineChart as LineIcon, Trophy,
   Dumbbell, Bell, Settings, LogOut, Plus, Calendar, ChevronRight, Menu,
+  Calculator, CalendarDays,
 } from "lucide-react";
-import { useState } from "react";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "@/services/firebase";
+import { logout } from "@/services/auth";
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const navItems = [
   { icon: Activity, label: "Overview", to: "/dashboard" },
+  { icon: Calculator, label: "BMI Intel", to: "/bmi" },
+  { icon: CalendarDays, label: "Routine", to: "/routine" },
   { icon: Dumbbell, label: "Workouts", to: "/workouts" },
   { icon: Apple, label: "Nutrition", to: "/nutrition" },
   { icon: Droplets, label: "Hydration", to: "/hydration" },
@@ -28,7 +39,31 @@ interface DashboardLayoutProps {
 
 export const DashboardLayout = ({ title, subtitle, action, children }: DashboardLayoutProps) => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [notifications, setNotifications] = useState([
+    { id: "1", title: "Welcome to FitOS!", message: "Your journey to greatness starts here.", time: "Just now", read: false, type: "system" },
+    { id: "2", title: "Daily Goal Hit!", message: "You reached your water intake goal. Stay hydrated!", time: "2h ago", read: false, type: "achievement" },
+  ]);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    return () => unsub();
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
+  };
+
+  // Get first initial for avatar fallback
+  const displayName = user?.displayName || user?.email?.split("@")[0] || "You";
+  const initials = displayName.charAt(0).toUpperCase();
+  const photoURL = user?.photoURL;
 
   const Sidebar = (
     <>
@@ -57,12 +92,22 @@ export const DashboardLayout = ({ title, subtitle, action, children }: Dashboard
         })}
       </nav>
       <div className="space-y-1 pt-4 border-t border-border/50">
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors">
-          <Settings className="h-4 w-4" /> Settings
-        </button>
-        <Link to="/" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors">
-          <LogOut className="h-4 w-4" /> Log out
+        <Link 
+          to="/settings"
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+            pathname === "/settings"
+              ? "bg-gradient-primary text-primary-foreground shadow-glow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
+          }`}
+        >
+          <Settings className="h-4 w-4" /> <span className="font-medium">Settings</span>
         </Link>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+        >
+          <LogOut className="h-4 w-4" /> Log out
+        </button>
       </div>
     </>
   );
@@ -91,16 +136,76 @@ export const DashboardLayout = ({ title, subtitle, action, children }: Dashboard
             {subtitle && <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary animate-pulse" />
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary animate-pulse" />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0 bg-popover border-border/50 shadow-2xl" align="end">
+                <div className="p-4 border-b border-border/50 flex items-center justify-between">
+                  <h3 className="font-display font-bold text-sm">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <button 
+                      onClick={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
+                      className="text-[10px] uppercase tracking-widest text-primary hover:underline font-bold"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                <ScrollArea className="h-[300px]">
+                  {notifications.length > 0 ? (
+                    <div className="divide-y divide-border/30">
+                      {notifications.map((n) => (
+                        <div key={n.id} className={`p-4 hover:bg-muted/50 transition-colors ${!n.read ? "bg-primary/5" : ""}`}>
+                          <div className="flex items-start gap-3">
+                            <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${n.type === "achievement" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"}`}>
+                              {n.type === "achievement" ? <Trophy className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold">{n.title}</div>
+                              <div className="text-[11px] text-muted-foreground leading-tight mt-1">{n.message}</div>
+                              <div className="text-[9px] text-muted-foreground/60 mt-2 uppercase tracking-tighter">{n.time}</div>
+                            </div>
+                            {!n.read && <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1" />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <Bell className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground">All caught up!</p>
+                    </div>
+                  )}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
             {action ?? (
               <Button variant="hero" size="sm">
                 <Plus className="h-4 w-4" /> Quick add
               </Button>
             )}
-            <div className="h-9 w-9 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground">A</div>
+            {/* Real user avatar */}
+            {photoURL ? (
+              <img
+                src={photoURL}
+                alt={displayName}
+                title={displayName}
+                className="h-9 w-9 rounded-full object-cover border-2 border-primary/40"
+              />
+            ) : (
+              <div
+                title={displayName}
+                className="h-9 w-9 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground"
+              >
+                {initials}
+              </div>
+            )}
           </div>
         </header>
 

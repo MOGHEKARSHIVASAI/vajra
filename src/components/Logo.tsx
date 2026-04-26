@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Flame } from "lucide-react";
+import { Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LogoProps {
@@ -17,11 +17,11 @@ export const Logo = ({ className, size = "md" }: LogoProps) => {
   return (
     <Link to="/" className={cn("flex items-center gap-2.5 group", className)}>
       <div className={cn("relative flex items-center justify-center rounded-lg bg-gradient-primary shadow-glow-sm transition-transform group-hover:scale-105", sizes.box)}>
-        <Flame className={cn("text-primary-foreground", sizes.icon)} strokeWidth={2.5} />
+        <Zap className={cn("text-primary-foreground fill-current", sizes.icon)} strokeWidth={2.5} />
         <div className="absolute inset-0 rounded-lg bg-gradient-primary blur-md opacity-50 -z-10" />
       </div>
       <span className={cn("font-display font-bold tracking-tight", sizes.wrap)}>
-        FORGE
+        VAJRA
       </span>
     </Link>
   );

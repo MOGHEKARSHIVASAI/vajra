@@ -6,30 +6,30 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Search, Play, Pause, RotateCcw, Plus, Minus, Check, Dumbbell,
-  Zap, Timer, Flame, ChevronRight, Filter,
+  Zap, Timer, Flame, ChevronRight, Filter, Trash2
 } from "lucide-react";
-
-const exerciseLib = [
-  { name: "Bench Press", muscle: "Chest", equip: "Barbell", diff: "Intermediate" },
-  { name: "Squat", muscle: "Legs", equip: "Barbell", diff: "Intermediate" },
-  { name: "Deadlift", muscle: "Back", equip: "Barbell", diff: "Advanced" },
-  { name: "Overhead Press", muscle: "Shoulders", equip: "Barbell", diff: "Intermediate" },
-  { name: "Pull-up", muscle: "Back", equip: "Bodyweight", diff: "Intermediate" },
-  { name: "Dumbbell Row", muscle: "Back", equip: "Dumbbell", diff: "Beginner" },
-  { name: "Bicep Curl", muscle: "Arms", equip: "Dumbbell", diff: "Beginner" },
-  { name: "Lateral Raise", muscle: "Shoulders", equip: "Dumbbell", diff: "Beginner" },
-  { name: "Leg Press", muscle: "Legs", equip: "Machine", diff: "Beginner" },
-  { name: "Romanian Deadlift", muscle: "Legs", equip: "Barbell", diff: "Intermediate" },
-];
+import { useUserData } from "@/hooks/useUserData";
+import { logWorkout } from "@/services/firestore";
+import { EXERCISE_LIBRARY } from "@/utils/constants";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const muscleFilters = ["All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core"];
 
 interface SetRow { reps: number; weight: number; done: boolean; }
 
+interface WorkoutExercise {
+  id: string;
+  name: string;
+  muscle: string;
+  equipment: string;
+  sets: SetRow[];
+}
+
 function RestTimer() {
   const [secs, setSecs] = useState(90);
   const [running, setRunning] = useState(false);
-  const ref = useRef<NodeJS.Timeout>();
+  const ref = useRef<any>();
 
   useEffect(() => {
     if (running && secs > 0) {
@@ -86,111 +86,168 @@ function RestTimer() {
           </Button>
           <Button size="icon" variant="outline" onClick={() => setSecs((s) => Math.min(s + 30, 600))}><Plus className="h-4 w-4" /></Button>
         </div>
-        <div className="flex justify-center gap-2 mt-3 text-xs">
-          {[60, 90, 120, 180].map((t) => (
-            <button key={t} onClick={() => setSecs(t)} className="px-2 py-1 rounded-md bg-surface-1 hover:bg-surface-2 text-muted-foreground hover:text-foreground transition-colors">
-              {t}s
-            </button>
-          ))}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function ActiveExercise() {
-  const [sets, setSets] = useState<SetRow[]>([
-    { reps: 8, weight: 85, done: true },
-    { reps: 8, weight: 85, done: true },
-    { reps: 7, weight: 85, done: false },
-    { reps: 6, weight: 85, done: false },
-  ]);
-
-  const toggleSet = (i: number) => setSets((s) => s.map((row, idx) => idx === i ? { ...row, done: !row.done } : row));
-  const addSet = () => setSets((s) => [...s, { reps: 8, weight: 85, done: false }]);
-
-  return (
-    <Card className="p-6 bg-gradient-card border-border/50">
-      <div className="flex items-start justify-between mb-5">
-        <div>
-          <Badge className="mb-2 bg-primary/15 text-primary border-primary/30">Exercise 3 of 5</Badge>
-          <h3 className="font-display text-2xl font-bold">Bench Press</h3>
-          <p className="text-xs text-muted-foreground mt-1">Chest · Barbell · Last PR: 90kg × 5</p>
-        </div>
-        <div className="text-right">
-          <div className="text-xs text-muted-foreground">Volume</div>
-          <div className="font-display text-xl font-bold gradient-text">2,380 kg</div>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="grid grid-cols-12 gap-2 px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-          <div className="col-span-1">Set</div>
-          <div className="col-span-3">Previous</div>
-          <div className="col-span-3">Weight (kg)</div>
-          <div className="col-span-3">Reps</div>
-          <div className="col-span-2 text-right">Done</div>
-        </div>
-        {sets.map((s, i) => (
-          <div key={i} className={`grid grid-cols-12 gap-2 items-center p-3 rounded-lg border transition-all ${s.done ? "bg-success/5 border-success/30" : "bg-surface-1 border-border/40 hover:border-primary/30"}`}>
-            <div className="col-span-1 font-bold text-sm">{i + 1}</div>
-            <div className="col-span-3 text-xs text-muted-foreground">85kg × 8</div>
-            <div className="col-span-3 flex items-center gap-1">
-              <button className="h-6 w-6 rounded bg-surface-2 flex items-center justify-center hover:bg-surface-3"><Minus className="h-3 w-3" /></button>
-              <Input value={s.weight} className="h-8 text-center bg-surface-2 border-border/40 px-1" readOnly />
-              <button className="h-6 w-6 rounded bg-surface-2 flex items-center justify-center hover:bg-surface-3"><Plus className="h-3 w-3" /></button>
-            </div>
-            <div className="col-span-3 flex items-center gap-1">
-              <button className="h-6 w-6 rounded bg-surface-2 flex items-center justify-center hover:bg-surface-3"><Minus className="h-3 w-3" /></button>
-              <Input value={s.reps} className="h-8 text-center bg-surface-2 border-border/40 px-1" readOnly />
-              <button className="h-6 w-6 rounded bg-surface-2 flex items-center justify-center hover:bg-surface-3"><Plus className="h-3 w-3" /></button>
-            </div>
-            <div className="col-span-2 flex justify-end">
-              <button
-                onClick={() => toggleSet(i)}
-                className={`h-9 w-9 rounded-lg flex items-center justify-center transition-all ${s.done ? "bg-gradient-primary text-primary-foreground shadow-glow-sm" : "bg-surface-2 text-muted-foreground hover:bg-surface-3"}`}
-              >
-                <Check className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex gap-2 mt-4">
-        <Button variant="outline" className="flex-1" onClick={addSet}><Plus className="h-4 w-4" /> Add set</Button>
-        <Button variant="hero" className="flex-1">Next exercise <ChevronRight className="h-4 w-4" /></Button>
       </div>
     </Card>
   );
 }
 
 const Workouts = () => {
+  const { user } = useUserData();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [isFinishing, setIsFinishing] = useState(false);
+  const [sessionExercises, setSessionExercises] = useState<WorkoutExercise[]>([]);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [elapsed, setElapsed] = useState("00:00");
+  const [isStarted, setIsStarted] = useState(false);
 
-  const filtered = exerciseLib.filter(
+  useEffect(() => {
+    if (!isStarted || !startTime) {
+      setElapsed("00:00");
+      return;
+    }
+    const itv = setInterval(() => {
+      const now = new Date();
+      const diff = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+      const m = Math.floor(diff / 60);
+      const s = diff % 60;
+      setElapsed(`${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+    }, 1000);
+    return () => clearInterval(itv);
+  }, [isStarted, startTime]);
+
+  const handleStartWorkout = () => {
+    setIsStarted(true);
+    setStartTime(new Date());
+    toast.info("Workout session started!");
+  };
+
+  const addExerciseToSession = (ex: any) => {
+    const newEx: WorkoutExercise = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: ex.name,
+      muscle: ex.muscle,
+      equipment: ex.equipment,
+      sets: [{ reps: 10, weight: 0, done: false }]
+    };
+    setSessionExercises([...sessionExercises, newEx]);
+    toast.success(`Added ${ex.name} to session`);
+  };
+
+  const removeExerciseFromSession = (id: string) => {
+    setSessionExercises(sessionExercises.filter(e => e.id !== id));
+  };
+
+  const updateSet = (exId: string, setIdx: number, data: Partial<SetRow>) => {
+    setSessionExercises(prev => prev.map(ex => {
+      if (ex.id !== exId) return ex;
+      const newSets = [...ex.sets];
+      newSets[setIdx] = { ...newSets[setIdx], ...data };
+      return { ...ex, sets: newSets };
+    }));
+  };
+
+  const addSet = (exId: string) => {
+    setSessionExercises(prev => prev.map(ex => {
+      if (ex.id !== exId) return ex;
+      const lastSet = ex.sets[ex.sets.length - 1];
+      return { ...ex, sets: [...ex.sets, { ...lastSet, done: false }] };
+    }));
+  };
+
+  const handleFinishWorkout = async () => {
+    if (!user) {
+      toast.error("You must be logged in to save workouts.");
+      return;
+    }
+    if (sessionExercises.length === 0) {
+      toast.error("Add at least one exercise to finish.");
+      return;
+    }
+
+    setIsFinishing(true);
+    try {
+      const totalVolume = sessionExercises.reduce((total, ex) => {
+        return total + ex.sets.reduce((st, s) => st + (s.done ? (s.reps * s.weight) : 0), 0);
+      }, 0);
+
+      const duration = startTime ? Math.floor((new Date().getTime() - startTime.getTime()) / 60000) : 0;
+
+      await logWorkout(user.uid, {
+        name: "Gym Session",
+        date: new Date().toISOString().split("T")[0],
+        totalVolume,
+        duration,
+        exercises: sessionExercises,
+        xpEarned: Math.min(250, 50 + Math.floor(totalVolume / 100))
+      });
+      
+      toast.success(`Workout saved! +${Math.min(250, 50 + Math.floor(totalVolume / 100))} XP`);
+      navigate("/dashboard");
+    } catch (error: any) {
+      console.error("Error saving workout:", error);
+      toast.error("Failed to save: " + (error.message || "Unknown error"));
+    } finally {
+      setIsFinishing(false);
+    }
+  };
+
+  const filtered = EXERCISE_LIBRARY.filter(
     (e) => (filter === "All" || e.muscle === filter) && e.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalVolume = sessionExercises.reduce((total, ex) => {
+    return total + ex.sets.reduce((st, s) => st + (s.done ? (s.reps * s.weight) : 0), 0);
+  }, 0);
+
+  const setsDone = sessionExercises.reduce((total, ex) => {
+    return total + ex.sets.filter(s => s.done).length;
+  }, 0);
+
+  const totalSets = sessionExercises.reduce((total, ex) => total + ex.sets.length, 0);
 
   return (
     <DashboardLayout
       title="Workouts"
-      subtitle="Active session · 14:32 elapsed · 2 of 5 done"
-      action={<Button variant="hero" size="sm"><Flame className="h-4 w-4" /> Finish</Button>}
+      subtitle={isStarted ? `Active session · ${elapsed} elapsed · ${sessionExercises.length} exercises` : "Ready to train?"}
+      action={
+        isStarted && (
+          <Button variant="hero" size="sm" onClick={handleFinishWorkout} disabled={isFinishing}>
+            {isFinishing ? "Saving..." : <><Flame className="h-4 w-4" /> Finish</>}
+          </Button>
+        )
+      }
     >
-      {/* Session header */}
-      <Card className="relative overflow-hidden bg-gradient-ember border-0 p-6">
+      {!isStarted ? (
+        <Card className="relative overflow-hidden bg-gradient-card border-border/50 p-12 text-center">
+          <div className="absolute inset-0 bg-gradient-radial-glow opacity-20" />
+          <div className="relative z-10">
+            <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+              <Dumbbell className="h-10 w-10 text-primary animate-pulse" />
+            </div>
+            <h2 className="font-display text-3xl font-bold mb-2">Ready for your workout?</h2>
+            <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+              Start your session to track sets, reps, and volume in real-time. Your progress will be saved to your profile.
+            </p>
+            <Button size="lg" variant="hero" className="px-12 py-6 text-lg" onClick={handleStartWorkout}>
+              <Play className="h-5 w-5 mr-2" /> Start Session
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <>
+          <Card className="relative overflow-hidden bg-gradient-ember border-0 p-6">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,transparent,rgba(0,0,0,0.5))]" />
         <div className="relative grid sm:grid-cols-4 gap-6 items-center">
           <div>
-            <div className="text-xs text-primary-foreground/80 uppercase tracking-widest">Push Day</div>
-            <div className="font-display text-2xl font-bold text-primary-foreground">Chest · Shoulders · Tris</div>
+            <div className="text-xs text-primary-foreground/80 uppercase tracking-widest">Active Session</div>
+            <div className="font-display text-2xl font-bold text-primary-foreground">{elapsed}</div>
           </div>
           {[
-            { label: "Elapsed", value: "14:32", icon: Timer },
-            { label: "Volume", value: "4,820 kg", icon: Dumbbell },
-            { label: "Sets done", value: "11 / 18", icon: Zap },
+            { label: "Volume", value: `${totalVolume.toLocaleString()} kg`, icon: Dumbbell },
+            { label: "Sets done", value: `${setsDone} / ${totalSets}`, icon: Zap },
+            { label: "Exercises", value: sessionExercises.length, icon: ChevronRight },
           ].map((s) => (
             <div key={s.label} className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-primary-foreground/15 flex items-center justify-center">
@@ -206,18 +263,81 @@ const Workouts = () => {
       </Card>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <ActiveExercise />
+        <div className="lg:col-span-2 space-y-4">
+          {sessionExercises.length === 0 ? (
+            <Card className="p-12 text-center border-dashed border-border/60 bg-surface-1/50">
+              <Dumbbell className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+              <h3 className="font-display text-xl font-bold">No exercises added</h3>
+              <p className="text-muted-foreground text-sm mt-2">Click an exercise from the library below to start tracking.</p>
+            </Card>
+          ) : (
+            sessionExercises.map((ex) => (
+              <Card key={ex.id} className="p-6 bg-gradient-card border-border/50">
+                <div className="flex items-start justify-between mb-5">
+                  <div>
+                    <h3 className="font-display text-xl font-bold">{ex.name}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">{ex.muscle} · {ex.equipment}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => removeExerciseFromSession(ex.id)} className="text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-12 gap-2 px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <div className="col-span-1">Set</div>
+                    <div className="col-span-4">Weight (kg)</div>
+                    <div className="col-span-4">Reps</div>
+                    <div className="col-span-3 text-right">Done</div>
+                  </div>
+                  {ex.sets.map((s, i) => (
+                    <div key={i} className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border transition-all ${s.done ? "bg-success/5 border-success/30" : "bg-surface-1 border-border/40"}`}>
+                      <div className="col-span-1 font-bold text-sm">{i + 1}</div>
+                      <div className="col-span-4 flex items-center gap-1">
+                        <Input 
+                          type="number" 
+                          value={s.weight} 
+                          onChange={(e) => updateSet(ex.id, i, { weight: Number(e.target.value) })}
+                          onFocus={(e) => e.target.select()}
+                          className="h-8 text-center bg-surface-2 border-border/40 px-1" 
+                        />
+                      </div>
+                      <div className="col-span-4 flex items-center gap-1">
+                        <Input 
+                          type="number" 
+                          value={s.reps} 
+                          onChange={(e) => updateSet(ex.id, i, { reps: Number(e.target.value) })}
+                          onFocus={(e) => e.target.select()}
+                          className="h-8 text-center bg-surface-2 border-border/40 px-1" 
+                        />
+                      </div>
+                      <div className="col-span-3 flex justify-end">
+                        <button
+                          onClick={() => updateSet(ex.id, i, { done: !s.done })}
+                          className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all ${s.done ? "bg-gradient-primary text-primary-foreground" : "bg-surface-2 text-muted-foreground"}`}
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="outline" size="sm" className="w-full mt-4 h-8 text-xs" onClick={() => addSet(ex.id)}>
+                  <Plus className="h-3 w-3 mr-1" /> Add set
+                </Button>
+              </Card>
+            ))
+          )}
         </div>
-        <RestTimer />
+        <div className="space-y-6">
+          <RestTimer />
+        </div>
       </div>
 
-      {/* Exercise library */}
       <Card className="p-6 bg-gradient-card border-border/50">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
           <div>
             <h3 className="font-display font-semibold text-lg">Exercise Library</h3>
-            <p className="text-xs text-muted-foreground">{filtered.length} exercises</p>
+            <p className="text-xs text-muted-foreground">Click to add to session</p>
           </div>
           <div className="flex items-center gap-2 w-full md:w-auto">
             <div className="relative flex-1 md:w-64">
@@ -249,19 +369,21 @@ const Workouts = () => {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((ex) => (
-            <button key={ex.name} className="group text-left p-4 rounded-xl bg-surface-1 border border-border/40 hover:border-primary/40 hover:shadow-glow-sm transition-all">
+            <button key={ex.name} onClick={() => addExerciseToSession(ex)} className="group text-left p-4 rounded-xl bg-surface-1 border border-border/40 hover:border-primary/40 hover:shadow-glow-sm transition-all">
               <div className="flex items-center justify-between mb-3">
                 <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                   <Dumbbell className="h-4 w-4 text-primary" />
                 </div>
-                <Badge variant="outline" className="text-[10px] border-border/50">{ex.diff}</Badge>
+                <Badge variant="outline" className="text-[10px] border-border/50">{ex.difficulty || "Beginner"}</Badge>
               </div>
               <div className="font-semibold text-sm">{ex.name}</div>
-              <div className="text-xs text-muted-foreground mt-1">{ex.muscle} · {ex.equip}</div>
+              <div className="text-xs text-muted-foreground mt-1">{ex.muscle} · {ex.equipment}</div>
             </button>
           ))}
         </div>
       </Card>
+        </>
+      )}
     </DashboardLayout>
   );
 };

@@ -1,16 +1,20 @@
 import { useState, useRef, useEffect } from "react";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "@/services/firebase";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MuscleModel3D } from "@/components/MuscleModel3D";
-import { Brain, Send, Sparkles, Zap, Target, Apple, Moon, TrendingUp, Dumbbell } from "lucide-react";
+import { Brain, Send, Sparkles, Zap, Target, Apple, Moon, TrendingUp, Dumbbell, AlertCircle } from "lucide-react";
+import { getGeminiResponse } from "@/services/ai";
+import { useUserData } from "@/hooks/useUserData";
 
 interface Msg { role: "user" | "ai"; text: string; }
 
-const initialMessages: Msg[] = [
-  { role: "ai", text: "Welcome back, Alex. I reviewed your last 7 days. Volume is up 12% — your bench is primed for a PR. Want me to plan tomorrow's session?" },
+const makeInitialMessages = (firstName: string): Msg[] => [
+  { role: "ai", text: `Welcome back, ${firstName}. I reviewed your last 7 days. Volume is up 12% — your bench is primed for a PR. Want me to plan tomorrow's session?` },
   { role: "user", text: "Yes, and balance my legs — I've been skipping them." },
   { role: "ai", text: "Smart call. Tomorrow: heavy squat day (5×5 @ 110kg), Romanian deadlifts, walking lunges, leg press. ~55 min. I'll add a deload on Friday so you don't burn out. Sound good?" },
 ];
@@ -23,28 +27,68 @@ const quickPrompts = [
 ];
 
 const Coach = () => {
-  const [messages, setMessages] = useState<Msg[]>(initialMessages);
+  const [user, setUser] = useState<User | null>(null);
+  const firstName = user?.displayName
+    ? user.displayName.split(" ")[0]
+    : user?.email?.split("@")[0] ?? "there";
+  const initials = firstName.charAt(0).toUpperCase();
+
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const { profile, recentWorkouts, todayNutrition } = useUserData();
+
+  useEffect(() => {
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      const name = u?.displayName ? u.displayName.split(" ")[0] : u?.email?.split("@")[0] ?? "there";
+      setMessages(makeInitialMessages(name));
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
 
-  const send = (text?: string) => {
+  const send = async (text?: string) => {
     const t = (text ?? input).trim();
     if (!t) return;
+    
+    setError(null);
     setMessages((m) => [...m, { role: "user", text: t }]);
     setInput("");
     setTyping(true);
-    setTimeout(() => {
+
+    try {
+      // Build context from user data
+      const context = `
+        User Profile: ${JSON.stringify(profile)}
+        Recent Workouts: ${JSON.stringify(recentWorkouts.slice(0, 3))}
+        Today's Nutrition: ${JSON.stringify(todayNutrition)}
+      `.trim();
+
+      // Convert local history to Gemini format
+      const history = messages.map(m => ({
+        role: m.role === "ai" ? "model" as const : "user" as const,
+        parts: [{ text: m.text }]
+      }));
+
+      const response = await getGeminiResponse(`${context}\n\nUser Question: ${t}`, history, profile?.preferences?.geminiKey);
+      
       setMessages((m) => [...m, {
         role: "ai",
-        text: "Got it. I'm pulling your data… here's what I'd recommend: focus on quality reps over volume tomorrow, hit at least 30g protein at every meal, and aim for 7.5h of sleep. Want me to set reminders?",
+        text: response,
       }]);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong. Is your API key set?");
+      console.error(err);
+    } finally {
       setTyping(false);
-    }, 1400);
+    }
   };
 
   return (
@@ -59,12 +103,12 @@ const Coach = () => {
           <div className="flex items-center gap-3 p-5 border-b border-border/50">
             <div className="relative">
               <div className="h-10 w-10 rounded-xl bg-gradient-primary flex items-center justify-center shadow-glow-sm">
-                <Brain className="h-5 w-5 text-primary-foreground" />
+                <Zap className="h-5 w-5 text-primary-foreground fill-current" />
               </div>
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-success border-2 border-card" />
             </div>
             <div>
-              <div className="font-display font-semibold">FORGE Coach</div>
+              <div className="font-display font-semibold">VAJRA Coach</div>
               <div className="text-xs text-muted-foreground">Online · trained on your history</div>
             </div>
           </div>
@@ -74,10 +118,10 @@ const Coach = () => {
               <div key={i} className={`flex gap-3 animate-fade-in ${m.role === "user" ? "justify-end" : ""}`}>
                 {m.role === "ai" && (
                   <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                    <Brain className="h-4 w-4 text-primary" />
+                    <Zap className="h-4 w-4 text-primary fill-current" />
                   </div>
                 )}
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                   m.role === "user"
                     ? "bg-gradient-primary text-primary-foreground rounded-br-sm"
                     : "bg-surface-1 border border-border/40 rounded-bl-sm"
@@ -85,19 +129,27 @@ const Coach = () => {
                   {m.text}
                 </div>
                 {m.role === "user" && (
-                  <div className="h-8 w-8 rounded-lg bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0">A</div>
+                  <div className="h-8 w-8 rounded-lg bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0">{initials}</div>
                 )}
               </div>
             ))}
             {typing && (
               <div className="flex gap-3 animate-fade-in">
                 <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                  <Brain className="h-4 w-4 text-primary" />
+                  <Zap className="h-4 w-4 text-primary fill-current" />
                 </div>
                 <div className="bg-surface-1 border border-border/40 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                   <span className="h-2 w-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: "0.2s" }} />
                   <span className="h-2 w-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: "0.4s" }} />
+                </div>
+              </div>
+            )}
+            {error && (
+              <div className="flex justify-center p-4">
+                <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-2 flex items-center gap-2 text-destructive text-xs">
+                  <AlertCircle className="h-4 w-4" />
+                  {error}
                 </div>
               </div>
             )}
