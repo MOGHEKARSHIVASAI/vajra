@@ -15,17 +15,30 @@ import {
 } from "recharts";
 import { useUserData } from "@/hooks/useUserData";
 import { Link } from "react-router-dom";
+import { BodyStatsDialog } from "@/components/dashboard/BodyStatsDialog";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const Dashboard = () => {
-  const [highlights] = useState(["chest", "arms", "shoulders"]);
   const { 
     user, profile, recentWorkouts, 
     todayNutrition, weekNutrition, 
     todayWater, weekWater, 
     loading 
   } = useUserData();
+
+  // Calculate dynamic highlights based on workouts from the last 7 days
+  const highlights = Array.from(new Set(
+    recentWorkouts
+      .filter(w => {
+        const workoutDate = new Date(w.date || (w.createdAt?.toDate ? w.createdAt.toDate().toISOString() : 0));
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        return workoutDate >= sevenDaysAgo;
+      })
+      .flatMap(w => w.exercises || [])
+      .map(ex => ex.muscle.toLowerCase())
+  ));
 
   // ── Derived values ──────────────────────────────────────────────
   const firstName = user?.displayName
@@ -151,7 +164,14 @@ const Dashboard = () => {
     <DashboardLayout
       title={`Welcome back, ${firstName}`}
       subtitle={`${dayName} · ${recentWorkouts.length > 0 ? `${recentWorkouts.length} recent workouts` : "No workouts logged yet"}`}
-      action={<Button variant="hero" size="sm" asChild><Link to="/workouts"><Plus className="h-4 w-4" /> Log workout</Link></Button>}
+      action={
+        <div className="flex items-center gap-2">
+          {user?.uid && <BodyStatsDialog uid={user.uid} />}
+          <Button variant="hero" size="sm" asChild>
+            <Link to="/workouts"><Plus className="h-4 w-4" /> Log workout</Link>
+          </Button>
+        </div>
+      }
     >
       {/* Quick Actions & Check-in */}
       <div className="grid md:grid-cols-3 gap-6 mb-8">

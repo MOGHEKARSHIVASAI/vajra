@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Activity, Apple, Brain, Droplets, LineChart as LineIcon, Trophy,
   Dumbbell, Bell, Settings, LogOut, Plus, Calendar, ChevronRight, Menu,
-  Calculator, CalendarDays,
+  Calculator, CalendarDays, Moon, Shield
 } from "lucide-react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/services/firebase";
@@ -28,6 +28,8 @@ const navItems = [
   { icon: Brain, label: "AI Coach", to: "/coach" },
   { icon: Trophy, label: "Challenges", to: "/challenges" },
   { icon: Calendar, label: "Schedule", to: "/schedule" },
+  { icon: Moon, label: "Sleep", to: "/sleep" },
+  { icon: Shield, label: "Vault", to: "/vault" },
 ];
 
 interface DashboardLayoutProps {
@@ -64,6 +66,35 @@ export const DashboardLayout = ({ title, subtitle, action, children }: Dashboard
   const displayName = user?.displayName || user?.email?.split("@")[0] || "You";
   const initials = displayName.charAt(0).toUpperCase();
   const photoURL = user?.photoURL;
+  const SESSION_KEY = "active_workout_session";
+  const EXPIRATION_TIME = 3 * 60 * 60 * 1000;
+  const [activeSession, setActiveSession] = useState(false);
+
+  useEffect(() => {
+    const checkSession = () => {
+      const savedSession = localStorage.getItem(SESSION_KEY);
+      if (savedSession) {
+        try {
+          const { start, started } = JSON.parse(savedSession);
+          const startTimeDate = new Date(start);
+          const now = new Date();
+          if (started && (now.getTime() - startTimeDate.getTime()) < EXPIRATION_TIME) {
+            setActiveSession(true);
+          } else {
+            setActiveSession(false);
+          }
+        } catch (e) {
+          setActiveSession(false);
+        }
+      } else {
+        setActiveSession(false);
+      }
+    };
+
+    checkSession();
+    const itv = setInterval(checkSession, 30000);
+    return () => clearInterval(itv);
+  }, [pathname]);
 
   const Sidebar = (
     <>
@@ -209,7 +240,26 @@ export const DashboardLayout = ({ title, subtitle, action, children }: Dashboard
           </div>
         </header>
 
-        <div className="p-4 md:p-8 space-y-6 animate-fade-in">{children}</div>
+        <div className="p-4 md:p-8 space-y-6 animate-fade-in relative">
+          {activeSession && pathname !== "/workouts" && (
+            <Link to="/workouts" className="block mb-6 animate-in slide-in-from-top-4 duration-500">
+              <div className="bg-gradient-ember p-3 rounded-xl flex items-center justify-between shadow-glow-ember hover:scale-[1.01] transition-transform cursor-pointer overflow-hidden relative">
+                <div className="absolute inset-0 bg-white/10 opacity-20 animate-pulse" />
+                <div className="flex items-center gap-3 relative z-10">
+                  <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
+                    <Dumbbell className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white uppercase tracking-widest">Active Workout Session</div>
+                    <div className="text-[10px] text-white/80">You have a workout in progress. Click to resume tracking!</div>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-white relative z-10" />
+              </div>
+            </Link>
+          )}
+          {children}
+        </div>
       </main>
     </div>
   );

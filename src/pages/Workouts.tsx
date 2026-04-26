@@ -14,9 +14,29 @@ import { EXERCISE_LIBRARY } from "@/utils/constants";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
-const muscleFilters = ["All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core"];
+const muscleFilters = ["All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Cardio"];
 
-interface SetRow { reps: number; weight: number; done: boolean; }
+const muscleColors: Record<string, string> = {
+  Chest: "border-primary/30",
+  Back: "border-orange-500/30",
+  Legs: "border-rose-500/30",
+  Shoulders: "border-accent/30",
+  Arms: "border-amber-500/30",
+  Core: "border-sky-500/30",
+  Cardio: "border-success/30",
+};
+
+const muscleIconColors: Record<string, string> = {
+  Chest: "bg-primary/10 text-primary",
+  Back: "bg-orange-500/10 text-orange-400",
+  Legs: "bg-rose-500/10 text-rose-400",
+  Shoulders: "bg-accent/10 text-accent",
+  Arms: "bg-amber-500/10 text-amber-400",
+  Core: "bg-sky-500/10 text-sky-400",
+  Cardio: "bg-success/10 text-success",
+};
+
+interface SetRow { reps: number; weight: number; rpe?: number; done: boolean; }
 
 interface WorkoutExercise {
   id: string;
@@ -101,6 +121,44 @@ const Workouts = () => {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [elapsed, setElapsed] = useState("00:00");
   const [isStarted, setIsStarted] = useState(false);
+  const SESSION_KEY = "active_workout_session";
+  const EXPIRATION_TIME = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
+
+  // 1. Load session on mount
+  useEffect(() => {
+    const savedSession = localStorage.getItem(SESSION_KEY);
+    if (savedSession) {
+      try {
+        const { exercises, start, started } = JSON.parse(savedSession);
+        const startTimeDate = new Date(start);
+        const now = new Date();
+
+        // Check if session is still valid (not expired)
+        if (started && (now.getTime() - startTimeDate.getTime()) < EXPIRATION_TIME) {
+          setSessionExercises(exercises);
+          setStartTime(startTimeDate);
+          setIsStarted(true);
+        } else {
+          // Session expired, clear it
+          localStorage.removeItem(SESSION_KEY);
+        }
+      } catch (e) {
+        console.error("Failed to load session", e);
+      }
+    }
+  }, []);
+
+  // 2. Save session on any change
+  useEffect(() => {
+    if (isStarted && startTime) {
+      const sessionData = {
+        exercises: sessionExercises,
+        start: startTime.toISOString(),
+        started: isStarted
+      };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+    }
+  }, [sessionExercises, startTime, isStarted]);
 
   useEffect(() => {
     if (!isStarted || !startTime) {
@@ -184,6 +242,7 @@ const Workouts = () => {
       });
       
       toast.success(`Workout saved! +${Math.min(250, 50 + Math.floor(totalVolume / 100))} XP`);
+      localStorage.removeItem(SESSION_KEY); // Clear session
       navigate("/dashboard");
     } catch (error: any) {
       console.error("Error saving workout:", error);
@@ -213,9 +272,27 @@ const Workouts = () => {
       subtitle={isStarted ? `Active session · ${elapsed} elapsed · ${sessionExercises.length} exercises` : "Ready to train?"}
       action={
         isStarted && (
-          <Button variant="hero" size="sm" onClick={handleFinishWorkout} disabled={isFinishing}>
-            {isFinishing ? "Saving..." : <><Flame className="h-4 w-4" /> Finish</>}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                if (window.confirm("Are you sure you want to cancel this session? All progress will be lost.")) {
+                  setIsStarted(false);
+                  setSessionExercises([]);
+                  setStartTime(null);
+                  localStorage.removeItem(SESSION_KEY);
+                  toast.info("Session cancelled");
+                }
+              }}
+              disabled={isFinishing}
+            >
+              Cancel
+            </Button>
+            <Button variant="hero" size="sm" onClick={handleFinishWorkout} disabled={isFinishing}>
+              {isFinishing ? "Saving..." : <><Flame className="h-4 w-4" /> Finish</>}
+            </Button>
+          </div>
         )
       }
     >
@@ -272,11 +349,13 @@ const Workouts = () => {
             </Card>
           ) : (
             sessionExercises.map((ex) => (
-              <Card key={ex.id} className="p-6 bg-gradient-card border-border/50">
+              <Card key={ex.id} className={`p-6 bg-gradient-card border-l-4 ${muscleColors[ex.muscle] || "border-border/50"}`}>
                 <div className="flex items-start justify-between mb-5">
                   <div>
                     <h3 className="font-display text-xl font-bold">{ex.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{ex.muscle} · {ex.equipment}</p>
+                    <p className={`text-xs mt-1 font-semibold uppercase tracking-wider ${muscleIconColors[ex.muscle]?.split(" ")[1] || "text-muted-foreground"}`}>
+                      {ex.muscle} · {ex.equipment}
+                    </p>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => removeExerciseFromSession(ex.id)} className="text-muted-foreground hover:text-destructive">
                     <Trash2 className="h-4 w-4" />
@@ -285,14 +364,15 @@ const Workouts = () => {
                 <div className="space-y-2">
                   <div className="grid grid-cols-12 gap-2 px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <div className="col-span-1">Set</div>
-                    <div className="col-span-4">Weight (kg)</div>
-                    <div className="col-span-4">Reps</div>
+                    <div className="col-span-3">Weight</div>
+                    <div className="col-span-3">Reps</div>
+                    <div className="col-span-2">RPE</div>
                     <div className="col-span-3 text-right">Done</div>
                   </div>
                   {ex.sets.map((s, i) => (
                     <div key={i} className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border transition-all ${s.done ? "bg-success/5 border-success/30" : "bg-surface-1 border-border/40"}`}>
                       <div className="col-span-1 font-bold text-sm">{i + 1}</div>
-                      <div className="col-span-4 flex items-center gap-1">
+                      <div className="col-span-3 flex items-center gap-1">
                         <Input 
                           type="number" 
                           value={s.weight} 
@@ -301,13 +381,23 @@ const Workouts = () => {
                           className="h-8 text-center bg-surface-2 border-border/40 px-1" 
                         />
                       </div>
-                      <div className="col-span-4 flex items-center gap-1">
+                      <div className="col-span-3 flex items-center gap-1">
                         <Input 
                           type="number" 
                           value={s.reps} 
                           onChange={(e) => updateSet(ex.id, i, { reps: Number(e.target.value) })}
                           onFocus={(e) => e.target.select()}
                           className="h-8 text-center bg-surface-2 border-border/40 px-1" 
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input 
+                          type="number" 
+                          min={1} max={10}
+                          placeholder="RPE"
+                          value={s.rpe || ""} 
+                          onChange={(e) => updateSet(ex.id, i, { rpe: Number(e.target.value) })}
+                          className="h-8 text-center bg-surface-2 border-border/40 px-1 text-[10px]" 
                         />
                       </div>
                       <div className="col-span-3 flex justify-end">
@@ -369,10 +459,14 @@ const Workouts = () => {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((ex) => (
-            <button key={ex.name} onClick={() => addExerciseToSession(ex)} className="group text-left p-4 rounded-xl bg-surface-1 border border-border/40 hover:border-primary/40 hover:shadow-glow-sm transition-all">
+            <button 
+              key={ex.name} 
+              onClick={() => addExerciseToSession(ex)} 
+              className={`group text-left p-4 rounded-xl bg-surface-1 border transition-all hover:shadow-glow-sm ${muscleColors[ex.muscle] || "border-border/40"} hover:border-foreground/20`}
+            >
               <div className="flex items-center justify-between mb-3">
-                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                  <Dumbbell className="h-4 w-4 text-primary" />
+                <div className={`h-9 w-9 rounded-lg flex items-center justify-center transition-colors ${muscleIconColors[ex.muscle] || "bg-primary/10 text-primary"}`}>
+                  <Dumbbell className="h-4 w-4" />
                 </div>
                 <Badge variant="outline" className="text-[10px] border-border/50">{ex.difficulty || "Beginner"}</Badge>
               </div>

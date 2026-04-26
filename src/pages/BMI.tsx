@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/services/firebase";
-import { updateUserProfile, getUserProfile, logWeight } from "@/services/firestore";
+import { updateUserProfile, getUserProfile, logBodyStats } from "@/services/firestore";
 import { useUserData } from "@/hooks/useUserData";
 import { useToast } from "@/hooks/use-toast";
 
@@ -154,7 +154,7 @@ const BMI = () => {
       });
       
       // Also log weight if it changed significantly or as a daily entry
-      await logWeight(user.uid, {
+      await logBodyStats(user.uid, {
         weight,
         date: new Date().toISOString().split("T")[0]
       });
@@ -187,7 +187,7 @@ const BMI = () => {
       const today = new Date().toISOString().split("T")[0];
       
       // 1. Log to history
-      await logWeight(user.uid, {
+      await logBodyStats(user.uid, {
         weight: weightToLog,
         date: today
       });

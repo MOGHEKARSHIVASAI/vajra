@@ -34,12 +34,16 @@ const Challenges = () => {
   const xp = profile?.gamification?.xp ?? 0;
   const level = profile?.gamification?.level ?? 1;
   const streak = profile?.gamification?.streak ?? 0;
-  
   const xpInLevel = xp % 1000;
   const xpPct = (xpInLevel / 1000) * 100;
-  
-  const workoutCount = recentWorkouts.length;
   const waterCount = weekWater.length;
+  
+  const achievements = profile?.achievements || [];
+  const badgesEarned = badges.filter(b => {
+    if (b.name === "Inferno" && streak >= 30) return true;
+    if (b.name === "Vajra Master" && (profile?.totalWorkouts || 0) >= 100) return true;
+    return achievements.includes(b.name);
+  }).length;
 
   return (
     <DashboardLayout
@@ -75,7 +79,7 @@ const Challenges = () => {
             <div className="grid grid-cols-3 gap-3 mt-5">
               {[
                 { label: "Streak", val: `${streak}d` },
-                { label: "Workouts", val: workoutCount },
+                { label: "Workouts", val: profile?.totalWorkouts || 0 },
                 { label: "XP", val: xp > 1000 ? `${(xp/1000).toFixed(1)}k` : xp },
               ].map((s) => (
                 <div key={s.label} className="text-center p-2 rounded-lg bg-primary-foreground/10 backdrop-blur">
@@ -90,7 +94,7 @@ const Challenges = () => {
 
       {/* Active challenges */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 mt-8">
           <h3 className="font-display font-semibold text-lg flex items-center gap-2">
             <Target className="h-5 w-5 text-primary" /> Active Challenges
           </h3>
@@ -134,18 +138,19 @@ const Challenges = () => {
       </div>
 
       {/* Badges grid */}
-      <div>
+      <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-semibold text-lg flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" /> Badge Collection
           </h3>
-          <span className="text-xs text-muted-foreground">0 earned</span>
+          <span className="text-xs text-muted-foreground">{badgesEarned} earned</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
           {badges.map((b, i) => {
             let earned = false;
             if (b.name === "Inferno" && streak >= 30) earned = true;
-            if (b.name === "Vajra Master" && workoutCount >= 100) earned = true;
+            if (b.name === "Vajra Master" && (profile?.totalWorkouts || 0) >= 100) earned = true;
+            if (achievements.includes(b.name)) earned = true;
 
             return (
               <Card

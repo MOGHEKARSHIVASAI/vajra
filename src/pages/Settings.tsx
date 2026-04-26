@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { 
   User, Mail, Bell, Shield, Palette, Trash2, Save, LogOut, 
   ChevronRight, Github, ExternalLink, Globe, Smartphone,
-  Camera, Zap, Info, Key, Eye, EyeOff, Brain
+  Camera, Zap, Info, Key, Eye, EyeOff, Brain, Target
 } from "lucide-react";
 import { useUserData } from "@/hooks/useUserData";
 import { updateUserProfile } from "@/services/firestore";
@@ -18,7 +18,7 @@ import { auth } from "@/services/firebase";
 import { updateProfile } from "firebase/auth";
 
 const Settings = () => {
-  const { profile, user, loading } = useUserData();
+  const { profile, user, recentWorkouts, loading } = useUserData();
   const { toast } = useToast();
   
   const [name, setName] = useState("");
@@ -32,6 +32,11 @@ const Settings = () => {
   const [biometrics, setBiometrics] = useState(true);
   const [geminiKey, setGeminiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
+  
+  // Goals State
+  const [goalCalories, setGoalCalories] = useState(2500);
+  const [goalWater, setGoalWater] = useState(3000);
+  const [goalProtein, setGoalProtein] = useState(170);
 
   useEffect(() => {
     if (profile) {
@@ -45,6 +50,13 @@ const Settings = () => {
       if (prefs.publicProfile !== undefined) setPublicProfile(prefs.publicProfile);
       if (prefs.biometrics !== undefined) setBiometrics(prefs.biometrics);
       if (prefs.geminiKey !== undefined) setGeminiKey(prefs.geminiKey);
+
+      // Load goals
+      if (profile.goals) {
+        setGoalCalories(profile.goals.calories || 2500);
+        setGoalWater(profile.goals.water || 3000);
+        setGoalProtein(profile.goals.protein || 170);
+      }
     }
   }, [profile, user]);
 
@@ -71,6 +83,11 @@ const Settings = () => {
           publicProfile,
           biometrics,
           geminiKey
+        },
+        goals: {
+          calories: goalCalories,
+          water: goalWater,
+          protein: goalProtein
         }
       });
       
@@ -91,6 +108,71 @@ const Settings = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (!recentWorkouts || recentWorkouts.length === 0) {
+      toast({ title: "No data", description: "You don't have any workout history to export yet." });
+      return;
+    }
+
+    try {
+      // 1. Define Headers
+      const headers = [
+        "Date",
+        "Workout Name",
+        "Duration (mins)",
+        "Total Volume (kg)",
+        "Exercises",
+        "XP Earned"
+      ];
+
+      // 2. Format Rows
+      const rows = recentWorkouts.map(w => {
+        // Handle Date Extraction (Local Time)
+        let displayDate = w.date;
+        if (!displayDate && w.createdAt) {
+          const d = w.createdAt.toDate ? w.createdAt.toDate() : new Date(w.createdAt);
+          displayDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        // Format exercises as a readable string: "Bench Press (3 sets), Squat (4 sets)"
+        const exerciseSummary = (w.exercises || [])
+          .map(ex => `${ex.name} (${ex.sets?.length || 0} sets)`)
+          .join(" | ");
+
+        return [
+          displayDate || "N/A",
+          w.name || "Unnamed Workout",
+          w.duration || 0,
+          w.totalVolume || 0,
+          exerciseSummary,
+          w.xpEarned || 0
+        ].map(val => `"${String(val).replace(/"/g, '""')}"`); // Quote and escape
+      });
+
+      // 3. Assemble CSV Content
+      const csvString = [
+        headers.join(","),
+        ...rows.map(r => r.join(","))
+      ].join("\n");
+
+      // 4. Create Blob and Download
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `VAJRA_Workout_Export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast({ title: "Export Successful", description: "Your workout history has been saved." });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Export Failed", description: "Something went wrong during export.", variant: "destructive" });
     }
   };
 
@@ -243,6 +325,51 @@ const Settings = () => {
                   <Switch checked={item.state} onCheckedChange={item.setState} />
                 </div>
               ))}
+            </div>
+          </Card>
+
+          <Card className="bg-gradient-card border-border/50 overflow-hidden">
+            <div className="p-6 border-b border-border/50">
+              <h3 className="font-display text-lg font-bold flex items-center gap-2">
+                <Target className="h-5 w-5 text-warning" /> Health Goals
+              </h3>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">Daily Calories</Label>
+                  <Input type="number" value={goalCalories} onChange={(e) => setGoalCalories(Number(e.target.value))} className="bg-surface-1 border-border/40" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">Daily Protein (g)</Label>
+                  <Input type="number" value={goalProtein} onChange={(e) => setGoalProtein(Number(e.target.value))} className="bg-surface-1 border-border/40" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">Daily Water (ml)</Label>
+                  <Input type="number" value={goalWater} onChange={(e) => setGoalWater(Number(e.target.value))} className="bg-surface-1 border-border/40" />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="bg-gradient-card border-border/50 overflow-hidden">
+            <div className="p-6 border-b border-border/50">
+              <h3 className="font-display text-lg font-bold flex items-center gap-2">
+                <Info className="h-5 w-5 text-sky-400" /> Data Portability
+              </h3>
+            </div>
+            <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div>
+                <div className="text-sm font-bold">Export My Data</div>
+                <div className="text-xs text-muted-foreground mt-1">Download your entire workout and nutrition history as a CSV file.</div>
+              </div>
+              <Button 
+                variant="outline" 
+                className="border-border/40 hover:bg-surface-2"
+                onClick={handleExportCSV}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" /> Export to CSV
+              </Button>
             </div>
           </Card>
 

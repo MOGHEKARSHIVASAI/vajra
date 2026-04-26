@@ -1,20 +1,10 @@
 import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  addDoc, 
-  updateDoc, 
-  query, 
-  where, 
-  orderBy, 
-  limit, 
-  serverTimestamp,
-  increment
+  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, 
+  query, where, orderBy, limit, serverTimestamp, increment, deleteDoc 
 } from "firebase/firestore";
-import { db } from "./firebase";
-export { db };
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "./firebase";
+export { db, storage };
 
 // Helper to wrap a promise with a timeout
 const withTimeout = (promise, ms = 10000) => {
@@ -41,6 +31,12 @@ export const updateUserProfile = async (uid, data) => {
   if (!db) return;
   const docRef = doc(db, "users", uid);
   await updateDoc(docRef, data);
+};
+
+export const updateUserGoals = async (uid, goals) => {
+  if (!db) return;
+  const docRef = doc(db, "users", uid);
+  await updateDoc(docRef, { goals });
 };
 
 // Workouts
@@ -83,11 +79,28 @@ export const logWorkout = async (uid, workoutData) => {
       streak = 1;
     }
 
+    // Achievement Checks
+    const achievements = userData.achievements || [];
+    const newAchievements = [...achievements];
+    
+    // Vajra Master Check (100 workouts)
+    const totalWorkouts = (userData.totalWorkouts || 0) + 1;
+    if (totalWorkouts >= 100 && !achievements.includes("Vajra Master")) {
+      newAchievements.push("Vajra Master");
+    }
+    
+    // Inferno Check (30 day streak)
+    if (streak >= 30 && !achievements.includes("Inferno")) {
+      newAchievements.push("Inferno");
+    }
+
     await updateDoc(userRef, {
       "gamification.lastWorkoutDate": new Date().toISOString(),
       "gamification.xp": xp,
       "gamification.level": level,
-      "gamification.streak": streak
+      "gamification.streak": streak,
+      "totalWorkouts": totalWorkouts,
+      "achievements": newAchievements
     });
   }
   
@@ -287,11 +300,24 @@ export const logWater = async (uid, date, amountMl) => {
   }
 };
 
-// Weight
-export const logWeight = async (uid, weightData) => {
-  const weightRef = collection(db, "weight_logs");
-  return addDoc(weightRef, {
-    ...weightData,
+// Body Stats
+export const logBodyStats = async (uid, statsData) => {
+  const statsRef = collection(db, "weight_logs"); // We reuse weight_logs but add bodyFat etc
+  return addDoc(statsRef, {
+    ...statsData,
+    userId: uid,
+    createdAt: serverTimestamp(),
+    date: statsData.date || new Date().toISOString().split("T")[0]
+  });
+};
+
+export const logWeight = logBodyStats; // Alias for backward compatibility
+
+// Calendar Events
+export const logEvent = async (uid, eventData) => {
+  const eventRef = collection(db, "calendar_events");
+  return addDoc(eventRef, {
+    ...eventData,
     userId: uid,
     createdAt: serverTimestamp()
   });
@@ -303,7 +329,8 @@ export const logSleep = async (uid, sleepData) => {
   return addDoc(sleepRef, {
     ...sleepData,
     userId: uid,
-    createdAt: serverTimestamp()
+    createdAt: serverTimestamp(),
+    date: sleepData.date || new Date().toISOString().split("T")[0]
   });
 };
 
@@ -312,6 +339,47 @@ export const getAchievements = async (uid) => {
   const q = query(collection(db, "achievements"), where("userId", "==", uid));
   const snap = await getDocs(q);
   return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+// Progress Photos
+export const logProgressPhoto = async (uid, photoData) => {
+  const photoRef = collection(db, "progress_photos");
+  return addDoc(photoRef, {
+    ...photoData,
+    userId: uid,
+    createdAt: serverTimestamp(),
+    date: photoData.date || new Date().toISOString().split("T")[0]
+  });
+};
+
+export const deleteProgressPhoto = async (photoId) => {
+  const photoRef = doc(db, "progress_photos", photoId);
+  return deleteDoc(photoRef);
+};
+
+export const uploadProgressPhoto = async (uid, file) => {
+  if (!storage) throw new Error("Storage not initialized");
+  console.log("[Storage] Starting upload for file:", file.name);
+  
+  try {
+    const storageRef = ref(storage, `progress_photos/${uid}/${Date.now()}_${file.name}`);
+    
+    // Use withTimeout to prevent infinite hanging
+    const snapshot = await withTimeout(uploadBytes(storageRef, file), 15000);
+    console.log("[Storage] Upload successful, getting URL...");
+    
+    const url = await withTimeout(getDownloadURL(snapshot.ref), 5000);
+    console.log("[Storage] URL generated:", url);
+    return url;
+  } catch (error) {
+    console.error("[Storage] Critical failure:", error);
+    throw error;
+  }
+};
+
+export const updateVaultPin = async (uid, pin) => {
+  const userRef = doc(db, "users", uid);
+  return updateDoc(userRef, { vaultPin: pin });
 };
 
 // Seed Data

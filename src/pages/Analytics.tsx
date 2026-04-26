@@ -2,7 +2,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, Trophy, Flame, Activity, Target, Calendar, Dumbbell } from "lucide-react";
+import { TrendingUp, TrendingDown, Trophy, Flame, Activity, Target, Calendar, Dumbbell, Scale } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, RadialBar, RadialBarChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -12,11 +12,10 @@ import { useUserData } from "@/hooks/useUserData";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const Analytics = () => {
-  const { recentWorkouts, profile, loading } = useUserData();
+  const { recentWorkouts, profile, weightHistory, loading } = useUserData();
 
-  if (loading) {
-    return <DashboardLayout title="Analytics" subtitle="Loading your data..."><div className="flex items-center justify-center h-64">Loading...</div></DashboardLayout>;
-  }
+  // Rules of Hooks: Don't return early
+  const showLoading = loading;
 
   // Calculate volume progression
   const volumeData = (() => {
@@ -74,8 +73,13 @@ const Analytics = () => {
         <Button variant="outline" size="sm"><Calendar className="h-4 w-4" /> Last 30 days</Button>
       }
     >
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {showLoading ? (
+        <div className="flex items-center justify-center h-64 text-muted-foreground italic">
+          Fetching your stats...
+        </div>
+      ) : (
+        <div className="space-y-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { icon: TrendingUp, label: "Total volume", value: (totalVolume / 1000).toFixed(1), unit: "k kg", trend: "+12%", up: true },
           { icon: Activity, label: "Avg Volume", value: (avgVolume / 1000).toFixed(1), unit: "k kg", trend: "Steady", up: true },
@@ -152,7 +156,71 @@ const Analytics = () => {
         </Card>
       </div>
 
-      {/* Recent Activity */}
+      {/* Body Stats Trends */}
+      <div className="mt-8 grid lg:grid-cols-2 gap-6">
+        <Card className="p-6 bg-gradient-card border-border/50">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="font-display font-semibold text-lg">Weight Trend</h3>
+              <p className="text-xs text-muted-foreground">Last 30 days · kg</p>
+            </div>
+            <div className={`h-10 w-10 rounded-lg bg-accent/15 flex items-center justify-center text-accent`}>
+              <Scale className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={weightHistory.slice(-10)}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(d) => d.split("-").slice(1).join("/")} />
+                <YAxis domain={['dataMin - 2', 'dataMax + 2']} stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+                <Line type="monotone" dataKey="weight" stroke="hsl(var(--accent))" strokeWidth={3} dot={{ fill: 'hsl(var(--accent))', r: 4 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-6 bg-gradient-card border-border/50">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="font-display font-semibold text-lg">Measurements</h3>
+              <p className="text-xs text-muted-foreground">Latest stats vs Previous</p>
+            </div>
+            <div className={`h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center text-primary`}>
+              <TrendingUp className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="space-y-4">
+            {(() => {
+              const latest = weightHistory[weightHistory.length - 1] || {};
+              const previous = weightHistory[weightHistory.length - 2] || {};
+              
+              const stats = [
+                { label: "Body Fat", val: latest.bodyFat ? `${latest.bodyFat}%` : "--", prev: previous.bodyFat },
+                { label: "Waist", val: latest.waist ? `${latest.waist}cm` : "--", prev: previous.waist },
+                { label: "Chest", val: latest.chest ? `${latest.chest}cm` : "--", prev: previous.chest },
+                { label: "Arms", val: latest.arms ? `${latest.arms}cm` : "--", prev: previous.arms },
+              ];
+
+              return stats.map(s => (
+                <div key={s.label} className="flex items-center justify-between p-3 rounded-lg bg-surface-1 border border-border/40">
+                  <span className="text-sm font-medium">{s.label}</span>
+                  <div className="flex items-center gap-3">
+                    {s.prev && latest[s.label.toLowerCase()] && (
+                      <Badge className={latest[s.label.toLowerCase()] < s.prev ? "bg-success/15 text-success border-0" : "bg-destructive/15 text-destructive border-0"}>
+                        {latest[s.label.toLowerCase()] < s.prev ? "-" : "+"}{(Math.abs(latest[s.label.toLowerCase()] - s.prev)).toFixed(1)}
+                      </Badge>
+                    )}
+                    <span className="font-display font-bold text-primary">{s.val}</span>
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </Card>
+      </div>
+
       <Card className="mt-8 p-6 bg-gradient-card border-border/50">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -186,6 +254,8 @@ const Analytics = () => {
           )}
         </div>
       </Card>
+        </div>
+      )}
     </DashboardLayout>
   );
 };

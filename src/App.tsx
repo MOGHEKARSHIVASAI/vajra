@@ -17,6 +17,8 @@ import Schedule from "./pages/Schedule.tsx";
 import BMI from "./pages/BMI.tsx";
 import Routine from "./pages/Routine.tsx";
 import Settings from "./pages/Settings.tsx";
+import Sleep from "./pages/Sleep.tsx";
+import Vault from "./pages/Vault.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -44,6 +46,8 @@ const App = () => (
             <Route path="/bmi" element={<BMI />} />
             <Route path="/routine" element={<Routine />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/sleep" element={<Sleep />} />
+            <Route path="/vault" element={<Vault />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

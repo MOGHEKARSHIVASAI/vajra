@@ -1,5 +1,5 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { initializeFirestore, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
@@ -32,12 +32,17 @@ if (isConfigValid) {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
     
+    // Set persistent session
+    setPersistence(auth, browserLocalPersistence)
+      .then(() => console.log("[Firebase] Persistence set to LOCAL"))
+      .catch((err) => console.error("[Firebase] Persistence Error:", err));
+    
     try {
-      db = getFirestore(app);
-    } catch (e) {
       db = initializeFirestore(app, {
-        experimentalAutoDetectLongPolling: true,
+        experimentalForceLongPolling: true,
       });
+    } catch (e) {
+      db = getFirestore(app);
     }
 
     storage = getStorage(app);

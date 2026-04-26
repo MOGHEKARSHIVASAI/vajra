@@ -4,7 +4,7 @@ import { auth } from "@/services/firebase";
 import { db } from "@/services/firestore";
 import {
   collection, query, where, limit, getDocs,
-  doc, getDoc, setDoc, onSnapshot
+  doc, getDoc, setDoc, onSnapshot, orderBy
 } from "firebase/firestore";
 
 export interface UserProfile {
@@ -54,6 +54,12 @@ export interface WaterLog {
 export interface WeightLog {
   id: string;
   weight: number;
+  bodyFat?: number;
+  neck?: number;
+  waist?: number;
+  chest?: number;
+  arms?: number;
+  thighs?: number;
   date: string;
   createdAt?: any;
 }
@@ -67,6 +73,10 @@ export interface UserData {
   todayWater: WaterLog | null;
   weekWater: WaterLog[];
   weightHistory: WeightLog[];
+  calendarEvents: any[];
+  sleepLogs: any[];
+  progressPhotos: any[];
+  vaultPin: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -82,6 +92,10 @@ export function useUserData(): UserData {
   const [todayWater, setTodayWater] = useState<WaterLog | null>(null);
   const [weekWater, setWeekWater] = useState<WaterLog[]>([]);
   const [weightHistory, setWeightHistory] = useState<WeightLog[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [sleepLogs, setSleepLogs] = useState<any[]>([]);
+  const [progressPhotos, setProgressPhotos] = useState<any[]>([]);
+  const [vaultPin, setVaultPin] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +116,8 @@ export function useUserData(): UserData {
         setTodayWater(null);
         setWeekWater([]);
         setWeightHistory([]);
+        setCalendarEvents([]);
+        setSleepLogs([]);
         setLoading(false);
       }
     });
@@ -121,7 +137,9 @@ export function useUserData(): UserData {
     // 1. Profile Listener
     const unsubProfile = onSnapshot(doc(db, "users", user.uid), (snap) => {
       if (snap.exists()) {
-        setProfile(snap.data() as UserProfile);
+        const data = snap.data();
+        setProfile(data as UserProfile);
+        setVaultPin(data.vaultPin ?? null);
       } else {
         const newProfile: UserProfile = {
           name: user.displayName ?? user.email?.split("@")[0] ?? "User",
@@ -190,12 +208,49 @@ export function useUserData(): UserData {
       setLoading(false);
     });
 
+    // 6. Calendar Events Listener
+    const eventsQ = query(
+      collection(db, "calendar_events"),
+      where("userId", "==", user.uid),
+      limit(50)
+    );
+    const unsubEvents = onSnapshot(eventsQ, (snap) => {
+      const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setCalendarEvents(logs);
+    });
+
+    // 7. Sleep Logs Listener
+    const sleepQ = query(
+      collection(db, "sleep_logs"),
+      where("userId", "==", user.uid),
+      limit(10)
+    );
+    const unsubSleep = onSnapshot(sleepQ, (snap) => {
+      const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setSleepLogs(logs);
+    });
+
+    // 8. Progress Photos Listener
+    const photosQ = query(
+      collection(db, "progress_photos"),
+      where("userId", "==", user.uid)
+    );
+    const unsubPhotos = onSnapshot(photosQ, (snap) => {
+      const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Sort client-side to avoid needing a composite index
+      logs.sort((a: any, b: any) => b.date.localeCompare(a.date));
+      setProgressPhotos(logs);
+    });
+
     return () => {
       unsubProfile();
       unsubWorkouts();
       unsubNutrition();
       unsubWater();
       unsubWeight();
+      unsubEvents();
+      unsubSleep();
+      unsubPhotos();
     };
   }, [user]);
 
@@ -204,6 +259,10 @@ export function useUserData(): UserData {
     todayNutrition, weekNutrition,
     todayWater, weekWater,
     weightHistory,
+    calendarEvents,
+    sleepLogs,
+    progressPhotos,
+    vaultPin,
     loading, error
   };
 }
